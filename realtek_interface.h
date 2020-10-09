@@ -48,6 +48,9 @@ typedef struct av_data_info_t {
 	unsigned int	volume_l;
 	unsigned int	volume_r;
 	unsigned long	timestamp;
+	unsigned int	fps;
+	unsigned int	width;
+	unsigned int	height;
 } av_data_info_t;
 
 /*
