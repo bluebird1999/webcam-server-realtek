@@ -15,13 +15,13 @@
 #include <rtscamkit.h>
 #include <rtsavapi.h>
 #include <rtsvideo.h>
+#include <malloc.h>
+#include <dmalloc.h>
 //program header
 #include "../../tools/tools_interface.h"
 #include "../../manager/manager_interface.h"
 //server header
 #include "realtek.h"
-
-#include "../../manager/global_interface.h"
 #include "realtek_interface.h"
 
 /*
@@ -137,12 +137,15 @@ static int server_message_proc(void)
 		return 0;
 	}
 	switch(msg.message){
-	case MSG_MANAGER_EXIT:
-		server_set_status(STATUS_TYPE_EXIT,1);
-		break;
-	case MSG_MANAGER_TIMER_ACK:
-		((HANDLER)msg.arg_in.handler)();
-		break;
+		case MSG_MANAGER_EXIT:
+			server_set_status(STATUS_TYPE_EXIT,1);
+			break;
+		case MSG_MANAGER_TIMER_ACK:
+			((HANDLER)msg.arg_in.handler)();
+			break;
+		default:
+			log_err("not processed message = %d", msg.message);
+			break;
 	}
 	msg_free(&msg);
 	return ret;
