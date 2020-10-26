@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-3.3"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-3.4"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						MSG_REALTEK_BASE | 0x0000
@@ -47,7 +47,7 @@ typedef struct av_data_info_t {
 	unsigned int	type;
 	unsigned int	volume_l;
 	unsigned int	volume_r;
-	unsigned long	timestamp;
+	unsigned long long int	timestamp;
 	unsigned int	fps;
 	unsigned int	width;
 	unsigned int	height;

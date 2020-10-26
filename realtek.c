@@ -165,6 +165,7 @@ static int heart_beat_proc(void)
 		msg.sender = msg.receiver = SERVER_REALTEK;
 		msg.arg_in.cat = info.status;
 		msg.arg_in.dog = info.thread_start;
+		msg.arg_in.duck = info.thread_exit;
 		ret = manager_message(&msg);
 		/***************************/
 	}
