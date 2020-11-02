@@ -15,6 +15,7 @@
 /*
  * define
  */
+#define			REALTEK_INIT_CONDITION_NUM		0
 
 /*
  * structure

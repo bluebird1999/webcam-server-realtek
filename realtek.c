@@ -20,6 +20,8 @@
 //program header
 #include "../../tools/tools_interface.h"
 #include "../../manager/manager_interface.h"
+#include "../../server/video/video_interface.h"
+#include "../../server/video2/video2_interface.h"
 //server header
 #include "realtek.h"
 #include "realtek_interface.h"
@@ -29,24 +31,13 @@
  */
 //variable
 static server_info_t 		info;
-//static realtek_config_t		config;
+//static realtek_config_t	config;
 static message_buffer_t		message;
 //function
 //common
 static void *server_func(void);
 static int server_message_proc(void);
-static int server_none(void);
-static int server_wait(void);
-static int server_setup(void);
-static int server_idle(void);
-static int server_start(void);
-static int server_run(void);
-static int server_stop(void);
-static int server_restart(void);
-static int server_error(void);
 static int server_release(void);
-static int server_get_status(int type);
-static int server_set_status(int type, int st);
 static void server_thread_termination(void);
 //specific
 
@@ -59,6 +50,59 @@ static void server_thread_termination(void);
 /*
  * helper
  */
+static int send_message(int receiver, message_t *msg)
+{
+	int st = 0;
+	switch(receiver) {
+		case SERVER_DEVICE:
+			st = server_device_message(msg);
+			break;
+		case SERVER_KERNEL:
+	//		st = server_kernel_message(msg);
+			break;
+		case SERVER_REALTEK:
+			st = server_realtek_message(msg);
+			break;
+		case SERVER_MIIO:
+			st = server_miio_message(msg);
+			break;
+		case SERVER_MISS:
+			st = server_miss_message(msg);
+			break;
+		case SERVER_MICLOUD:
+	//		st = server_micloud_message(msg);
+			break;
+		case SERVER_VIDEO:
+			st = server_video_message(msg);
+			break;
+		case SERVER_AUDIO:
+			st = server_audio_message(msg);
+			break;
+		case SERVER_RECORDER:
+			st = server_recorder_message(msg);
+			break;
+		case SERVER_PLAYER:
+			st = server_player_message(msg);
+			break;
+		case SERVER_SPEAKER:
+			st = server_speaker_message(msg);
+			break;
+		case SERVER_VIDEO2:
+			st = server_video2_message(msg);
+			break;
+		case SERVER_SCANNER:
+//			st = server_scanner_message(msg);
+			break;
+		case SERVER_MANAGER:
+			st = manager_message(msg);
+			break;
+		default:
+			log_err("unknown message target! %d", receiver);
+			break;
+	}
+	return st;
+}
+
 static void server_thread_termination(void)
 {
 	message_t msg;
@@ -70,45 +114,22 @@ static void server_thread_termination(void)
 static int server_release(void)
 {
 	rts_av_release();
+    /********message body********/
+	message_t msg;
+	msg_init(&msg);
+	msg.message = MSG_REALTEK_PROPERTY_NOTIFY;
+	msg.sender = SERVER_REALTEK;
+	msg.arg_in.cat = REALTEK_PROPERTY_AV_STATUS;
+	msg.arg_in.dog = 0;
+	server_video_message(&msg);
+	server_video2_message(&msg);
+	server_audio_message(&msg);
+	server_speaker_message(&msg);
+	/****************************/
 	msg_buffer_release(&message);
+	msg_free(&info.task.msg);
+	memset(&info, 0, sizeof(server_info_t));
 	return 0;
-}
-
-static int server_set_status(int type, int st)
-{
-	int ret=-1;
-	ret = pthread_rwlock_wrlock(&info.lock);
-	if(ret)	{
-		log_err("add lock fail, ret = %d", ret);
-		return ret;
-	}
-	if(type == STATUS_TYPE_STATUS)
-		info.status = st;
-	else if(type==STATUS_TYPE_EXIT)
-		info.exit = st;
-	ret = pthread_rwlock_unlock(&info.lock);
-	if (ret)
-		log_err("add unlock fail, ret = %d", ret);
-	return ret;
-}
-
-static int server_get_status(int type)
-{
-	int st;
-	int ret;
-	ret = pthread_rwlock_wrlock(&info.lock);
-	if(ret)	{
-		log_err("add lock fail, ret = %d", ret);
-		return ret;
-	}
-	if(type == STATUS_TYPE_STATUS)
-		st = info.status;
-	else if(type== STATUS_TYPE_EXIT)
-		st = info.exit;
-	ret = pthread_rwlock_unlock(&info.lock);
-	if (ret)
-		log_err("add unlock fail, ret = %d", ret);
-	return st;
 }
 
 static int server_message_proc(void)
@@ -116,7 +137,6 @@ static int server_message_proc(void)
 	int ret = 0, ret1 = 0;
 	message_t msg;
 	message_t send_msg;
-	message_arg_t rd;
 	msg_init(&msg);
 	msg_init(&send_msg);
 	ret = pthread_rwlock_wrlock(&message.lock);
@@ -138,10 +158,23 @@ static int server_message_proc(void)
 	}
 	switch(msg.message){
 		case MSG_MANAGER_EXIT:
-			server_set_status(STATUS_TYPE_EXIT,1);
+			info.exit = 1;
 			break;
 		case MSG_MANAGER_TIMER_ACK:
 			((HANDLER)msg.arg_in.handler)();
+			break;
+		case MSG_REALTEK_PROPERTY_GET:
+		    /********message body********/
+			msg_init(&send_msg);
+			send_msg.message = msg.message | 0x1000;
+			send_msg.sender = send_msg.receiver = SERVER_REALTEK;
+			send_msg.arg_in.cat = msg.arg_in.cat;
+			if( send_msg.arg_in.cat == REALTEK_PROPERTY_AV_STATUS) {
+				send_msg.arg_in.dog = (info.status == STATUS_RUN )? 1 : 0;
+			}
+			send_msg.result = 0;
+			ret = send_message(msg.receiver, &send_msg);
+			/***************************/
 			break;
 		default:
 			log_err("not processed message = %d", msg.message);
@@ -173,125 +206,127 @@ static int heart_beat_proc(void)
 }
 
 /*
+ * task
+ */
+/*
+ * task error: error->5 seconds->shut down server->msg manager
+ */
+static void task_error(void)
+{
+	unsigned int tick=0;
+	switch( info.status ) {
+		case STATUS_ERROR:
+			log_err("!!!!!!!!error in realtek, restart in 5 s!");
+			info.tick = time_get_now_stamp();
+			info.status = STATUS_NONE;
+			break;
+		case STATUS_NONE:
+			tick = time_get_now_stamp();
+			if( (tick - info.tick) > SERVER_RESTART_PAUSE ) {
+				info.exit = 1;
+				info.tick = tick;
+			}
+			break;
+		default:
+			log_err("!!!!!!!unprocessed server status in task_error = %d", info.status);
+			break;
+	}
+	usleep(1000);
+	return;
+}
+
+/*
+ * default task: none->run
+ */
+static void task_default(void)
+{
+	int ret = 0;
+	message_t msg;
+	switch( info.status ){
+		case STATUS_NONE:
+			if( misc_full_bit( info.thread_exit, REALTEK_INIT_CONDITION_NUM ) )
+				info.status = STATUS_WAIT;
+			else
+				sleep(1);
+			break;
+		case STATUS_WAIT:
+			info.status = STATUS_SETUP;
+			break;
+		case STATUS_SETUP:
+			//setup av
+			rts_set_log_mask(RTS_LOG_MASK_CONS);
+			ret = rts_av_init();
+			if (ret) {
+				log_err("rts_av_init fail");
+				info.status = STATUS_ERROR;
+				break;
+			}
+		    /********message body********/
+			msg_init(&msg);
+			msg.message = MSG_REALTEK_PROPERTY_NOTIFY;
+			msg.sender = msg.receiver = SERVER_REALTEK;
+			msg.arg_in.cat = REALTEK_PROPERTY_AV_STATUS;
+			msg.arg_in.dog = 1;
+			server_video_message(&msg);
+			server_video2_message(&msg);
+			server_audio_message(&msg);
+			server_speaker_message(&msg);
+			/****************************/
+			info.status = STATUS_IDLE;
+			break;
+		case STATUS_IDLE:
+			info.status = STATUS_RUN;
+			break;
+		case STATUS_RUN:
+			break;
+		case STATUS_STOP:
+			rts_av_release();
+			break;
+		case STATUS_ERROR:
+			info.task.func = task_error;
+			break;
+		default:
+			log_err("!!!!!!!unprocessed server status in task_default = %d", info.status);
+			break;
+		}
+	usleep(1000);
+	return;
+}
+
+/*
  * state machine
  */
-static int server_none(void)
-{
-	int ret = 0;
-	server_set_status(STATUS_TYPE_STATUS, STATUS_WAIT);
-	return 0;
-}
-
-static int server_wait(void)
-{
-	int ret = 0;
-	server_set_status(STATUS_TYPE_STATUS, STATUS_SETUP);
-	return 0;
-}
-
-static int server_setup(void)
-{
-	int ret = 0;
-	//setup av
-	rts_set_log_mask(RTS_LOG_MASK_CONS);
-	ret = rts_av_init();
-	if (ret) {
-		log_err("rts_av_init fail");
-		return ret;
-	}
-	server_set_status(STATUS_TYPE_STATUS, STATUS_IDLE);
-	return ret;
-}
-
-static int server_idle(void)
-{
-	int ret = 0;
-	server_set_status(STATUS_TYPE_STATUS, STATUS_START);
-	return ret;
-}
-
-static int server_start(void)
-{
-	int ret = 0;
-	server_set_status(STATUS_TYPE_STATUS, STATUS_RUN);
-	return ret;
-}
-
-static int server_run(void)
-{
-	int ret = 0;
-	if( server_message_proc()!= 0)
-		log_err("error in message proc");
-	return ret;
-}
-
-static int server_stop(void)
-{
-	int ret = 0;
-	return ret;
-}
-
-static int server_restart(void)
-{
-	int ret = 0;
-	return ret;
-}
-
-static int server_error(void)
-{
-	int ret = 0;
-	server_release();
-	return ret;
-}
-
 static void *server_func(void)
 {
     signal(SIGINT, server_thread_termination);
     signal(SIGTERM, server_thread_termination);
-	misc_set_thread_name("server_realtek");
 	pthread_detach(pthread_self());
+	if( !message.init ) {
+		msg_buffer_init(&message, MSG_BUFFER_OVERFLOW_NO);
+	}
+	//default task
+	info.task.func = task_default;
+	info.task.start = STATUS_NONE;
+	info.task.end = STATUS_RUN;
 	while( !info.exit ) {
-	switch(info.status){
-		case STATUS_NONE:
-			server_none();
-			break;
-		case STATUS_WAIT:
-			server_wait();
-			break;
-		case STATUS_SETUP:
-			server_setup();
-			break;
-		case STATUS_IDLE:
-			server_idle();
-			break;
-		case STATUS_START:
-			server_start();
-			break;
-		case STATUS_RUN:
-			server_run();
-			break;
-		case STATUS_STOP:
-			server_stop();
-			break;
-		case STATUS_RESTART:
-			server_restart();
-			break;
-		case STATUS_ERROR:
-			server_error();
-			break;
+		info.task.func();
+		server_message_proc();
+		if( info.status!=STATUS_ERROR )
+			heart_beat_proc();
+	}
+	if( info.exit ) {
+		while( info.thread_start ) {
 		}
-//		usleep(100);//100ms
-		heart_beat_proc();
+	    /********message body********/
+		message_t msg;
+		msg_init(&msg);
+		msg.message = MSG_MANAGER_EXIT_ACK;
+		msg.sender = SERVER_REALTEK;
+		manager_message(&msg);
+		/***************************/
 	}
 	server_release();
 	log_info("-----------thread exit: server_realtek-----------");
-	message_t msg;
-    /********message body********/
-	msg_init(&msg);
-	msg.message = MSG_MANAGER_EXIT_ACK;
-	msg.sender = SERVER_REALTEK;
-	/****************************/
-	manager_message(&msg);
 	pthread_exit(0);
 }
 
@@ -301,8 +336,6 @@ static void *server_func(void)
 int server_realtek_start(void)
 {
 	int ret=-1;
-	msg_buffer_init(&message, MSG_BUFFER_OVERFLOW_NO);
-	pthread_rwlock_init(&info.lock, NULL);
 	ret = pthread_create(&info.id, NULL, server_func, NULL);
 	if(ret != 0) {
 		log_err("realtek server create error! ret = %d",ret);
@@ -317,8 +350,8 @@ int server_realtek_start(void)
 int server_realtek_message(message_t *msg)
 {
 	int ret=0,ret1;
-	if( server_get_status(STATUS_TYPE_STATUS)!= STATUS_RUN ) {
-		log_err("realtek server is not ready!");
+	if( !message.init ) {
+		log_err("realtek server is not ready for message processing!");
 		return -1;
 	}
 	ret = pthread_rwlock_wrlock(&message.lock);
@@ -327,6 +360,7 @@ int server_realtek_message(message_t *msg)
 		return ret;
 	}
 	ret = msg_buffer_push(&message, msg);
+	log_info("push into the realtek message queue: sender=%d, message=%x, ret=%d", msg->sender, msg->message, ret);
 	if( ret!=0 )
 		log_err("message push in realtek error =%d", ret);
 	ret1 = pthread_rwlock_unlock(&message.lock);
