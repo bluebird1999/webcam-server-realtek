@@ -101,10 +101,17 @@ static int send_message(int receiver, message_t *msg)
 	return st;
 }
 
+static int realtek_clean_mem(void)
+{
+	int ret = 0;
+	ret = system("echo -1 > /sys/devices/platform/rts_isp_mem/memctrl");
+	return ret;
+}
 static void server_thread_termination(void)
 {
 	message_t msg;
 	memset(&msg,0,sizeof(message_t));
+	msg.sender = msg.receiver = SERVER_REALTEK;
 	msg.message = MSG_REALTEK_SIGINT;
 	manager_message(&msg);
 }
@@ -175,7 +182,7 @@ static int server_message_proc(void)
 			/***************************/
 			break;
 		default:
-			log_qcy(DEBUG_SERIOUS, "not processed message = %d", msg.message);
+			log_qcy(DEBUG_SERIOUS, "not processed message = %x", msg.message);
 			break;
 	}
 	msg_free(&msg);
@@ -250,6 +257,7 @@ static void task_default(void)
 			break;
 		case STATUS_SETUP:
 			//setup av
+			realtek_clean_mem();
 			if( _config_.debug_level >= DEBUG_SERIOUS )
 				rts_set_log_mask(RTS_LOG_MASK_CONS);
 			ret = rts_av_init();
@@ -342,7 +350,7 @@ int server_realtek_start(void)
 		 return ret;
 	 }
 	else {
-		log_qcy(DEBUG_SERIOUS, "realtek server create successful!");
+		log_qcy(DEBUG_INFO, "realtek server create successful!");
 		return 0;
 	}
 }
@@ -351,7 +359,7 @@ int server_realtek_message(message_t *msg)
 {
 	int ret=0,ret1;
 	if( !message.init ) {
-		log_qcy(DEBUG_SERIOUS, "realtek server is not ready for message processing!");
+		log_qcy(DEBUG_INFO, "realtek server is not ready for message processing!");
 		return -1;
 	}
 	ret = pthread_rwlock_wrlock(&message.lock);
@@ -360,10 +368,10 @@ int server_realtek_message(message_t *msg)
 		return ret;
 	}
 	ret = msg_buffer_push(&message, msg);
-	log_qcy(DEBUG_SERIOUS, "push into the realtek message queue: sender=%d, message=%x, ret=%d, head=%d, tail=%d", msg->sender, msg->message, ret,
+	log_qcy(DEBUG_VERBOSE, "push into the realtek message queue: sender=%d, message=%x, ret=%d, head=%d, tail=%d", msg->sender, msg->message, ret,
 			message.head, message.tail);
 	if( ret!=0 )
-		log_qcy(DEBUG_SERIOUS, "message push in realtek error =%d", ret);
+		log_qcy(DEBUG_INFO, "message push in realtek error =%d", ret);
 	ret1 = pthread_rwlock_unlock(&message.lock);
 	if (ret1)
 		log_qcy(DEBUG_SERIOUS, "add message unlock fail, ret = %d\n", ret1);
