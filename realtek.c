@@ -258,7 +258,7 @@ static void task_default(void)
 		case STATUS_SETUP:
 			//setup av
 			realtek_clean_mem();
-			if( _config_.debug_level >= DEBUG_SERIOUS )
+			if( _config_.debug_level >= DEBUG_VERBOSE )
 				rts_set_log_mask(RTS_LOG_MASK_CONS);
 			ret = rts_av_init();
 			if (ret) {
