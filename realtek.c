@@ -247,6 +247,7 @@ static void task_default(void)
 {
 	int ret = 0;
 	message_t msg;
+	int mask=0;
 	switch( info.status ){
 		case STATUS_NONE:
 			if( misc_full_bit( info.thread_exit, REALTEK_INIT_CONDITION_NUM ) )
@@ -258,8 +259,18 @@ static void task_default(void)
 		case STATUS_SETUP:
 			//setup av
 			realtek_clean_mem();
+			rts_set_log_mask(RTS_LOG_MASK_CONS);
 			if( _config_.debug_level >= DEBUG_VERBOSE )
-				rts_set_log_mask(RTS_LOG_MASK_CONS);
+				mask |= (1<<RTS_LOG_NOTICE);
+			if(  _config_.debug_level >= DEBUG_INFO )
+				mask |=  (1<<RTS_LOG_INFO);
+			if(  _config_.debug_level >= DEBUG_WARNING )
+				mask |=  (1<<RTS_LOG_WARNING);
+			if(  _config_.debug_level >= DEBUG_SERIOUS )
+				mask |=  (1<<RTS_LOG_ERR) | (1<<RTS_LOG_CRIT) | (1<<RTS_LOG_ALERT) | (1<<RTS_LOG_EMERG);
+			if(  _config_.debug_level == DEBUG_NONE )
+				mask = 0;
+			rts_set_log_level(mask);
 			ret = rts_av_init();
 			if (ret) {
 				log_qcy(DEBUG_SERIOUS, "rts_av_init fail");
