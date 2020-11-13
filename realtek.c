@@ -329,18 +329,14 @@ static void *server_func(void)
 		server_message_proc();
 		heart_beat_proc();
 	}
-	if( info.exit ) {
-		while( info.thread_start ) {
-		}
-	    /********message body********/
-		message_t msg;
-		msg_init(&msg);
-		msg.message = MSG_MANAGER_EXIT_ACK;
-		msg.sender = SERVER_REALTEK;
-		manager_message(&msg);
-		/***************************/
-	}
 	server_release();
+/********message body********/
+	message_t msg;
+	msg_init(&msg);
+	msg.message = MSG_MANAGER_EXIT_ACK;
+	msg.sender = SERVER_REALTEK;
+	manager_message(&msg);
+/***************************/
 	log_qcy(DEBUG_SERIOUS, "-----------thread exit: server_realtek-----------");
 	pthread_exit(0);
 }
