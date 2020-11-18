@@ -119,6 +119,7 @@ static void server_thread_termination(void)
 static int server_release(void)
 {
 	rts_av_release();
+	usleep(1000*100);
     /********message body********/
 	message_t msg;
 	msg_init(&msg);
