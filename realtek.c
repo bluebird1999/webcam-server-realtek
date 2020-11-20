@@ -261,16 +261,16 @@ static void task_default(void)
 			//setup av
 			realtek_clean_mem();
 			rts_set_log_mask(RTS_LOG_MASK_CONS);
-			if( _config_.debug_level >= DEBUG_VERBOSE )
-				mask |= (1<<RTS_LOG_NOTICE);
-			if(  _config_.debug_level >= DEBUG_INFO )
-				mask |=  (1<<RTS_LOG_INFO);
-			if(  _config_.debug_level >= DEBUG_WARNING )
-				mask |=  (1<<RTS_LOG_WARNING);
-			if(  _config_.debug_level >= DEBUG_SERIOUS )
-				mask |=  (1<<RTS_LOG_ERR) | (1<<RTS_LOG_CRIT) | (1<<RTS_LOG_ALERT) | (1<<RTS_LOG_EMERG);
 			if(  _config_.debug_level == DEBUG_NONE )
-				mask = 0;
+				mask = 1<<RTS_LOG_EMERG;
+			else if(  _config_.debug_level == DEBUG_SERIOUS )
+				mask |=  (1<<RTS_LOG_ERR) | (1<<RTS_LOG_ALERT) | (1<<RTS_LOG_CRIT);
+			else if(  _config_.debug_level == DEBUG_WARNING )
+				mask |=  (1<<RTS_LOG_WARNING);
+			else if( _config_.debug_level == DEBUG_INFO )
+				mask =  (1<<RTS_LOG_INFO);
+			else if( _config_.debug_level == DEBUG_VERBOSE )
+				mask = RTS_LOG_DEBUG;
 			rts_set_log_level(mask);
 			ret = rts_av_init();
 			if (ret) {
