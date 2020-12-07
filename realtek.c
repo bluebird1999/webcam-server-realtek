@@ -31,11 +31,18 @@
 //variable
 static server_info_t 		info;
 static message_buffer_t		message;
+static pthread_rwlock_t		ilock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t		mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t		cond = PTHREAD_COND_INITIALIZER;
+
 //function
 //common
 static void *server_func(void);
 static int server_message_proc(void);
-static int server_release(void);
+static void server_release_1(void);
+static void server_release_2(void);
+static void server_release_3(void);
+static void task_exit(void);
 static void server_thread_termination(void);
 //specific
 
@@ -48,59 +55,6 @@ static void server_thread_termination(void);
 /*
  * helper
  */
-static int send_message(int receiver, message_t *msg)
-{
-	int st = 0;
-	switch(receiver) {
-		case SERVER_DEVICE:
-			st = server_device_message(msg);
-			break;
-		case SERVER_KERNEL:
-	//		st = server_kernel_message(msg);
-			break;
-		case SERVER_REALTEK:
-			st = server_realtek_message(msg);
-			break;
-		case SERVER_MIIO:
-			st = server_miio_message(msg);
-			break;
-		case SERVER_MISS:
-			st = server_miss_message(msg);
-			break;
-		case SERVER_MICLOUD:
-	//		st = server_micloud_message(msg);
-			break;
-		case SERVER_VIDEO:
-			st = server_video_message(msg);
-			break;
-		case SERVER_AUDIO:
-			st = server_audio_message(msg);
-			break;
-		case SERVER_RECORDER:
-			st = server_recorder_message(msg);
-			break;
-		case SERVER_PLAYER:
-			st = server_player_message(msg);
-			break;
-		case SERVER_SPEAKER:
-			st = server_speaker_message(msg);
-			break;
-		case SERVER_VIDEO2:
-			st = server_video2_message(msg);
-			break;
-		case SERVER_SCANNER:
-//			st = server_scanner_message(msg);
-			break;
-		case SERVER_MANAGER:
-			st = manager_message(msg);
-			break;
-		default:
-			log_qcy(DEBUG_SERIOUS, "unknown message target! %d", receiver);
-			break;
-	}
-	return st;
-}
-
 static int realtek_clean_mem(void)
 {
 	int ret = 0;
@@ -113,58 +67,77 @@ static void server_thread_termination(void)
 	memset(&msg,0,sizeof(message_t));
 	msg.sender = msg.receiver = SERVER_REALTEK;
 	msg.message = MSG_REALTEK_SIGINT;
-	manager_message(&msg);
+	manager_common_send_message(SERVER_MANAGER, &msg);
 }
 
-static int server_release(void)
+static void realtek_broadcast_thread_exit(void)
 {
-	rts_av_release();
-	usleep(1000*100);
-    /********message body********/
-	message_t msg;
-	msg_init(&msg);
-	msg.message = MSG_REALTEK_PROPERTY_NOTIFY;
-	msg.sender = SERVER_REALTEK;
-	msg.arg_in.cat = REALTEK_PROPERTY_AV_STATUS;
-	msg.arg_in.dog = 0;
-	server_video_message(&msg);
-	server_video2_message(&msg);
-	server_audio_message(&msg);
-	server_speaker_message(&msg);
-	/****************************/
-	msg_buffer_release(&message);
-	msg_free(&info.task.msg);
+}
+
+static void server_release_1(void)
+{
+	if( info.status2 ) {
+		rts_av_release();
+	}
+}
+
+static void server_release_2(void)
+{
+	msg_buffer_release2(&message, &mutex);
+}
+
+static void server_release_3(void)
+{
 	memset(&info, 0, sizeof(server_info_t));
-	return 0;
+}
+
+/*
+ *
+ */
+static int realtek_message_filter(message_t  *msg)
+{
+	int ret = 0;
+	if( info.task.func == task_exit) { //only system message
+		if( !msg_is_system(msg->message) && !msg_is_response(msg->message) )
+			return 1;
+	}
+	return ret;
 }
 
 static int server_message_proc(void)
 {
-	int ret = 0, ret1 = 0;
+	int ret = 0;
 	message_t msg;
 	message_t send_msg;
+	if( info.msg_lock ) return 0;
+//condition
+	pthread_mutex_lock(&mutex);
+	if( message.head == message.tail ) {
+		if( (info.status == info.old_status ) ) {
+			pthread_cond_wait(&cond,&mutex);
+		}
+	}
 	msg_init(&msg);
-	msg_init(&send_msg);
-	ret = pthread_rwlock_wrlock(&message.lock);
-	if(ret)	{
-		log_qcy(DEBUG_SERIOUS, "add message lock fail, ret = %d\n", ret);
-		return ret;
-	}
 	ret = msg_buffer_pop(&message, &msg);
-	ret1 = pthread_rwlock_unlock(&message.lock);
-	if (ret1) {
-		log_qcy(DEBUG_SERIOUS, "add message unlock fail, ret = %d\n", ret1);
-	}
-	if( ret == -1) {
-		msg_free(&msg);
-		return -1;
-	}
-	else if( ret == 1) {
+	pthread_mutex_unlock(&mutex);
+	if( ret == 1) {
 		return 0;
 	}
+	if( realtek_message_filter(&msg) ) {
+		msg_free(&msg);
+		log_qcy(DEBUG_VERBOSE, "REALTEK message--- sender=%d, message=%x, ret=%d, head=%d, tail=%d was screened, the current task is %p", msg.sender, msg.message,
+				ret, message.head, message.tail, info.task.func);
+		return -1;
+	}
+	log_qcy(DEBUG_VERBOSE, "-----pop out from the REALTEK message queue: sender=%d, message=%x, ret=%d, head=%d, tail=%d", msg.sender, msg.message,
+			ret, message.head, message.tail);
+	msg_init(&info.task.msg);
+	msg_deep_copy(&info.task.msg, &msg);
 	switch(msg.message){
 		case MSG_MANAGER_EXIT:
-			info.exit = 1;
+			info.task.func = task_exit;
+			info.status = EXIT_INIT;
+			info.msg_lock = 0;
 			break;
 		case MSG_MANAGER_TIMER_ACK:
 			((HANDLER)msg.arg_in.handler)();
@@ -179,8 +152,13 @@ static int server_message_proc(void)
 				send_msg.arg_in.dog = (info.status == STATUS_RUN )? 1 : 0;
 			}
 			send_msg.result = 0;
-			ret = send_message(msg.receiver, &send_msg);
+			ret = manager_common_send_message(msg.receiver, &send_msg);
 			/***************************/
+			break;
+		case MSG_MANAGER_EXIT_ACK:
+			misc_set_bit(&info.error, msg.sender, 0);
+			break;
+		case MSG_MANAGER_DUMMY:
 			break;
 		default:
 			log_qcy(DEBUG_SERIOUS, "not processed message = %x", msg.message);
@@ -190,123 +168,141 @@ static int server_message_proc(void)
 	return ret;
 }
 
-static int heart_beat_proc(void)
+/*
+ *
+ */
+static int server_none(void)
 {
 	int ret = 0;
-	message_t msg;
-	long long int tick = 0;
-	tick = time_get_now_stamp();
-	if( (tick - info.tick) > 10 ) {
-		info.tick = tick;
-	    /********message body********/
-		msg_init(&msg);
-		msg.message = MSG_MANAGER_HEARTBEAT;
-		msg.sender = msg.receiver = SERVER_REALTEK;
-		msg.arg_in.cat = info.status;
-		msg.arg_in.dog = info.thread_start;
-		msg.arg_in.duck = info.thread_exit;
-		ret = manager_message(&msg);
-		/***************************/
-	}
+	if( misc_full_bit( info.init_status, REALTEK_INIT_CONDITION_NUM ) )
+		info.status = STATUS_WAIT;
 	return ret;
 }
 
+static int server_setup(void)
+{
+	int ret = 0;
+	message_t msg;
+	int mask;
+	//setup av
+	realtek_clean_mem();
+	rts_set_log_mask(RTS_LOG_MASK_CONS);
+	if(  _config_.debug_level == DEBUG_NONE )
+		mask = 1<<RTS_LOG_CRIT;
+	else if(  _config_.debug_level == DEBUG_SERIOUS )
+		mask |=  (1<<RTS_LOG_ERR) | (1<<RTS_LOG_ALERT) | (1<<RTS_LOG_CRIT);
+	else if(  _config_.debug_level == DEBUG_WARNING )
+		mask |=  (1<<RTS_LOG_WARNING);
+	else if( _config_.debug_level == DEBUG_INFO )
+		mask =  (1<<RTS_LOG_INFO);
+	else if( _config_.debug_level == DEBUG_VERBOSE )
+		mask = RTS_LOG_DEBUG;
+	mask = 1<<RTS_LOG_CRIT;
+	rts_set_log_level(mask);
+	ret = rts_av_init();
+	info.status2 = 1;
+	if (ret) {
+		log_qcy(DEBUG_SERIOUS, "rts_av_init fail");
+		info.status = STATUS_ERROR;
+		return -1;
+	}
+    /********message body********/
+	msg_init(&msg);
+	msg.message = MSG_REALTEK_PROPERTY_NOTIFY;
+	msg.sender = msg.receiver = SERVER_REALTEK;
+	msg.arg_in.cat = REALTEK_PROPERTY_AV_STATUS;
+	msg.arg_in.dog = 1;
+	manager_common_send_message(SERVER_VIDEO, &msg);
+	manager_common_send_message(SERVER_VIDEO2, &msg);
+	manager_common_send_message(SERVER_AUDIO, &msg);
+	manager_common_send_message(SERVER_SPEAKER,    &msg);
+	/****************************/
+	info.status = STATUS_IDLE;
+	return ret;
+}
 /*
  * task
  */
 /*
- * task error: error->5 seconds->shut down server->msg manager
+ * default exit: *->exit
  */
-static void task_error(void)
+static void task_exit(void)
 {
-	unsigned int tick=0;
-	switch( info.status ) {
-		case STATUS_ERROR:
-			log_qcy(DEBUG_SERIOUS, "!!!!!!!!error in realtek, restart in 5 s!");
-			info.tick2 = time_get_now_stamp();
+	switch( info.status ){
+		case EXIT_INIT:
+			info.error = REALTEK_EXIT_CONDITION;
+			if( info.task.msg.sender == SERVER_MANAGER) {
+				info.error &= (info.task.msg.arg_in.cat);
+			}
+			info.status = EXIT_SERVER;
+			break;
+		case EXIT_SERVER:
+			if( !info.error )
+				info.status = EXIT_STAGE1;
+			break;
+		case EXIT_STAGE1:
+			server_release_1();
+			info.status = EXIT_THREAD;
+			break;
+		case EXIT_THREAD:
+			info.thread_exit = info.thread_start;
+			realtek_broadcast_thread_exit();
+			if( !info.thread_start )
+				info.status = EXIT_STAGE2;
+			break;
+			break;
+		case EXIT_STAGE2:
+			server_release_2();
+			info.status = EXIT_FINISH;
+			break;
+		case EXIT_FINISH:
+			info.exit = 1;
+		    /********message body********/
+			message_t msg;
+			msg_init(&msg);
+			msg.message = MSG_MANAGER_EXIT_ACK;
+			msg.sender = SERVER_REALTEK;
+			manager_common_send_message(SERVER_MANAGER, &msg);
+			/***************************/
 			info.status = STATUS_NONE;
 			break;
-		case STATUS_NONE:
-			tick = time_get_now_stamp();
-			if( (tick - info.tick2) > SERVER_RESTART_PAUSE ) {
-				info.exit = 1;
-				info.tick2 = tick;
-			}
-			break;
 		default:
-			log_qcy(DEBUG_SERIOUS, "!!!!!!!unprocessed server status in task_error = %d", info.status);
+			log_qcy(DEBUG_SERIOUS, "!!!!!!!unprocessed server status in task_exit = %d", info.status);
 			break;
-	}
-	usleep(1000);
+		}
 	return;
 }
+
 
 /*
  * default task: none->run
  */
 static void task_default(void)
 {
-	int ret = 0;
-	message_t msg;
-	int mask=0;
 	switch( info.status ){
 		case STATUS_NONE:
-			if( misc_full_bit( info.thread_exit, REALTEK_INIT_CONDITION_NUM ) )
-				info.status = STATUS_WAIT;
+			server_none();
 			break;
 		case STATUS_WAIT:
 			info.status = STATUS_SETUP;
 			break;
 		case STATUS_SETUP:
-			//setup av
-			realtek_clean_mem();
-			rts_set_log_mask(RTS_LOG_MASK_CONS);
-			if(  _config_.debug_level == DEBUG_NONE )
-				mask = 1<<RTS_LOG_EMERG;
-			else if(  _config_.debug_level == DEBUG_SERIOUS )
-				mask |=  (1<<RTS_LOG_ERR) | (1<<RTS_LOG_ALERT) | (1<<RTS_LOG_CRIT);
-			else if(  _config_.debug_level == DEBUG_WARNING )
-				mask |=  (1<<RTS_LOG_WARNING);
-			else if( _config_.debug_level == DEBUG_INFO )
-				mask =  (1<<RTS_LOG_INFO);
-			else if( _config_.debug_level == DEBUG_VERBOSE )
-				mask = RTS_LOG_DEBUG;
-			rts_set_log_level(mask);
-			ret = rts_av_init();
-			if (ret) {
-				log_qcy(DEBUG_SERIOUS, "rts_av_init fail");
-				info.status = STATUS_ERROR;
-				break;
-			}
-		    /********message body********/
-			msg_init(&msg);
-			msg.message = MSG_REALTEK_PROPERTY_NOTIFY;
-			msg.sender = msg.receiver = SERVER_REALTEK;
-			msg.arg_in.cat = REALTEK_PROPERTY_AV_STATUS;
-			msg.arg_in.dog = 1;
-			server_video_message(&msg);
-			server_video2_message(&msg);
-			server_audio_message(&msg);
-			server_speaker_message(&msg);
-			/****************************/
-			info.status = STATUS_IDLE;
+			server_setup();
 			break;
 		case STATUS_IDLE:
 			info.status = STATUS_RUN;
 			break;
 		case STATUS_RUN:
 			break;
-		case STATUS_STOP:
-			rts_av_release();
-			break;
 		case STATUS_ERROR:
-			info.task.func = task_error;
+			info.task.func = task_exit;
+			info.status = EXIT_INIT;
+			info.msg_lock = 0;
 			break;
 		default:
 			log_qcy(DEBUG_SERIOUS, "!!!!!!!unprocessed server status in task_default = %d", info.status);
 			break;
 		}
-	usleep(1000);
 	return;
 }
 
@@ -318,26 +314,17 @@ static void *server_func(void)
     signal(SIGINT, server_thread_termination);
     signal(SIGTERM, server_thread_termination);
 	pthread_detach(pthread_self());
-	if( !message.init ) {
-		msg_buffer_init(&message, MSG_BUFFER_OVERFLOW_NO);
-	}
+	misc_set_thread_name("server_realtek");
+	msg_buffer_init2(&message, MSG_BUFFER_OVERFLOW_NO, &mutex);
+	info.init = 1;
 	//default task
 	info.task.func = task_default;
-	info.task.start = STATUS_NONE;
-	info.task.end = STATUS_RUN;
 	while( !info.exit ) {
+		info.old_status = info.status;
 		info.task.func();
 		server_message_proc();
-		heart_beat_proc();
 	}
-	server_release();
-/********message body********/
-	message_t msg;
-	msg_init(&msg);
-	msg.message = MSG_MANAGER_EXIT_ACK;
-	msg.sender = SERVER_REALTEK;
-	manager_message(&msg);
-/***************************/
+	server_release_3();
 	log_qcy(DEBUG_SERIOUS, "-----------thread exit: server_realtek-----------");
 	pthread_exit(0);
 }
@@ -365,23 +352,21 @@ int server_realtek_start(void)
 
 int server_realtek_message(message_t *msg)
 {
-	int ret=0,ret1;
+	int ret=0;
+	pthread_mutex_lock(&mutex);
 	if( !message.init ) {
 		log_qcy(DEBUG_INFO, "realtek server is not ready for message processing!");
+		pthread_mutex_unlock(&mutex);
 		return -1;
-	}
-	ret = pthread_rwlock_wrlock(&message.lock);
-	if(ret)	{
-		log_qcy(DEBUG_SERIOUS, "add message lock fail, ret = %d\n", ret);
-		return ret;
 	}
 	ret = msg_buffer_push(&message, msg);
 	log_qcy(DEBUG_VERBOSE, "push into the realtek message queue: sender=%d, message=%x, ret=%d, head=%d, tail=%d", msg->sender, msg->message, ret,
 			message.head, message.tail);
 	if( ret!=0 )
 		log_qcy(DEBUG_INFO, "message push in realtek error =%d", ret);
-	ret1 = pthread_rwlock_unlock(&message.lock);
-	if (ret1)
-		log_qcy(DEBUG_SERIOUS, "add message unlock fail, ret = %d\n", ret1);
+	else {
+		pthread_cond_signal(&cond);
+	}
+	pthread_mutex_unlock(&mutex);
 	return ret;
 }
