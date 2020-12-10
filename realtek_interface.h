@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-4.0"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-4.1"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -111,6 +111,8 @@ typedef struct audio_stream_t {
 	int atoe_resample_ch;
 	//data
 	int	frame;
+	unsigned long long int realtek_stamp;
+	unsigned long long int unix_stamp;
 } audio_stream_t;
 
 typedef struct video_stream_t {
@@ -118,7 +120,10 @@ typedef struct video_stream_t {
 	int 	h264;
 	int		jpg;
 	int 	osd;
-	int		frame;
+	int 	frame;
+	unsigned long long int realtek_stamp;
+	unsigned long long int unix_stamp;
+
 } video_stream_t;
 /*
  * function
