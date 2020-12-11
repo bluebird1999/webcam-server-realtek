@@ -17,7 +17,8 @@
  */
 #define		REALTEK_INIT_CONDITION_NUM		0
 #define		REALTEK_EXIT_CONDITION			( (1 << SERVER_VIDEO) | (1 << SERVER_VIDEO2) |	\
-											(1 << SERVER_AUDIO) | (1 << SERVER_SCANNER) )
+											(1 << SERVER_AUDIO) | (1 << SERVER_SCANNER) | (1 << SERVER_SPEAKER) )
+
 /*
  * structure
  */
