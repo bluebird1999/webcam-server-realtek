@@ -31,7 +31,7 @@
 //variable
 static server_info_t 		info;
 static message_buffer_t		message;
-static pthread_rwlock_t		ilock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_rwlock_t		ilock = PTHREAD_RWLOCK_INITIALIZER;
 static pthread_mutex_t		mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t		cond = PTHREAD_COND_INITIALIZER;
 
@@ -109,13 +109,16 @@ static int server_message_proc(void)
 	int ret = 0;
 	message_t msg;
 	message_t send_msg;
-	if( info.msg_lock ) return 0;
 //condition
 	pthread_mutex_lock(&mutex);
 	if( message.head == message.tail ) {
 		if( (info.status == info.old_status ) ) {
 			pthread_cond_wait(&cond,&mutex);
 		}
+	}
+	if( info.msg_lock ) {
+		pthread_mutex_unlock(&mutex);
+		return 0;
 	}
 	msg_init(&msg);
 	ret = msg_buffer_pop(&message, &msg);
