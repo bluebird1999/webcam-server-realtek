@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-4.3"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-4.4"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -55,8 +55,8 @@ typedef enum {
 
 #define		AV_BUFFER_SIZE				64
 
-#define		AV_BUFFER_MIN_SAMPLE		200
-#define		AV_BUFFER_MAX_SAMPLE		500
+#define		AV_BUFFER_MIN_SAMPLE		300
+#define		AV_BUFFER_MAX_SAMPLE		600
 #define		AV_BUFFER_SUCCESS			0.9
 #define		AV_BUFFER_OVERRUN			0.3
 

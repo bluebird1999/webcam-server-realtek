@@ -233,9 +233,13 @@ static void task_exit(void)
 {
 	switch( info.status ){
 		case EXIT_INIT:
-			info.error = REALTEK_EXIT_CONDITION;
+			log_qcy(DEBUG_INFO,"REALTEK: switch to exit task!");
 			if( info.task.msg.sender == SERVER_MANAGER) {
+				info.error = REALTEK_EXIT_CONDITION;
 				info.error &= (info.task.msg.arg_in.cat);
+			}
+			else {
+				info.error = 0;
 			}
 			info.status = EXIT_SERVER;
 			break;
