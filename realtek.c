@@ -19,10 +19,10 @@
 //program header
 #include "../../tools/tools_interface.h"
 #include "../../manager/manager_interface.h"
-#include "../../server/video/video_interface.h"
-#include "../../server/video2/video2_interface.h"
-//server header
 #include "realtek.h"
+
+#include "../video/video_interface.h"
+#include "../video2/video2_interface.h"
 #include "realtek_interface.h"
 
 /*
