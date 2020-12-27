@@ -16,6 +16,7 @@
 #include <rtsavapi.h>
 #include <rtsvideo.h>
 #include <malloc.h>
+
 //program header
 #include "../../tools/tools_interface.h"
 #include "../../manager/manager_interface.h"
@@ -88,6 +89,7 @@ static void server_release_2(void)
 
 static void server_release_3(void)
 {
+	msg_free(&info.task.msg);
 	memset(&info, 0, sizeof(server_info_t));
 }
 
@@ -134,10 +136,10 @@ static int server_message_proc(void)
 	}
 	log_qcy(DEBUG_VERBOSE, "-----pop out from the REALTEK message queue: sender=%d, message=%x, ret=%d, head=%d, tail=%d", msg.sender, msg.message,
 			ret, message.head, message.tail);
-	msg_init(&info.task.msg);
-	msg_deep_copy(&info.task.msg, &msg);
 	switch(msg.message){
 		case MSG_MANAGER_EXIT:
+			msg_init(&info.task.msg);
+			msg_copy(&info.task.msg, &msg);
 			info.task.func = task_exit;
 			info.status = EXIT_INIT;
 			info.msg_lock = 0;
