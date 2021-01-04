@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-5.1"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-6.0"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -53,7 +53,7 @@ typedef enum {
 #define		REALTEK_PROPERTY_SERVER_STATUS					(0x0000 | PROPERTY_TYPE_GET)
 #define		REALTEK_PROPERTY_AV_STATUS						(0x0001 | PROPERTY_TYPE_GET | PROPERTY_TYPE_NOTIFY)
 
-#define		AV_BUFFER_SIZE				64
+#define		AV_BUFFER_SIZE				128
 
 #define		AV_BUFFER_MIN_SAMPLE		300
 #define		AV_BUFFER_MAX_SAMPLE		600
@@ -109,6 +109,8 @@ typedef struct audio_stream_t {
 	int encoder;
 	int capture_aec_ch;
 	int atoe_resample_ch;
+	int ptoc_resample_ch;
+	int playback_ch;
 	//data
 	int	frame;
 	unsigned long long int realtek_stamp;

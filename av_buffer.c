@@ -17,7 +17,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <malloc.h>
-
+#ifdef DMALLOC_ENABLE
+#include <dmalloc.h>
+#endif
 //program header
 #include "../../manager/manager_interface.h"
 #include "../../tools/tools_interface.h"
@@ -87,15 +89,20 @@ av_packet_t* av_buffer_get_empty(av_buffer_t *buff, int *overrun, int *success)
 	int i, id = 0;
 	unsigned int min = 9999999999;
 	pthread_rwlock_wrlock(buff->lock);
+/*	for(i=0;i<AV_BUFFER_SIZE;i++) {
+		if( (buff->packet[i].ref_num == 0 ) && (buff->packet[i].data != NULL ) ) {
+			av_packet_free(&(buff->packet[i]));
+		}
+	}
+*/
 	for(i=0;i<AV_BUFFER_SIZE;i++) {
-		if( buff->packet[i].ref_num == 0 &&
-				buff->packet[i].data == NULL ) {
+		if( (buff->packet[i].ref_num == 0) && (buff->packet[i].data == NULL) ) {
 			pthread_rwlock_unlock(buff->lock);
 			(*success)++;
 			return &(buff->packet[i]);
 		}
 	}
-	log_qcy(DEBUG_VERBOSE, "-------------av buffer overrun happened!---");
+	log_qcy(DEBUG_INFO, "-------------av buffer overrun happened!---");
 	for(i=0; i< AV_BUFFER_SIZE; i++) {
 		if( buff->packet[i].info.frame_index < min ) {
 			id = i;
@@ -103,7 +110,7 @@ av_packet_t* av_buffer_get_empty(av_buffer_t *buff, int *overrun, int *success)
 		}
 	}
 	(*overrun)++;
-	log_qcy(DEBUG_VERBOSE, "-------------av buffer overrun fixed with ===%d!---", id);
+	log_qcy(DEBUG_INFO, "-------------av buffer overrun fixed with ===%d!---", id);
 	av_packet_free(&(buff->packet[id]));
 	pthread_rwlock_unlock(buff->lock);
 	return &(buff->packet[id]);

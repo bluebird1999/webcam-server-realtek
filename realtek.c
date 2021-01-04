@@ -16,7 +16,9 @@
 #include <rtsavapi.h>
 #include <rtsvideo.h>
 #include <malloc.h>
-
+#ifdef DMALLOC_ENABLE
+#include <dmalloc.h>
+#endif
 //program header
 #include "../../tools/tools_interface.h"
 #include "../../manager/manager_interface.h"
@@ -219,8 +221,9 @@ static int server_setup(void)
 	msg.arg_in.dog = 1;
 	manager_common_send_message(SERVER_VIDEO, &msg);
 	manager_common_send_message(SERVER_VIDEO2, &msg);
+	manager_common_send_message(SERVER_VIDEO3, &msg);
 	manager_common_send_message(SERVER_AUDIO, &msg);
-	manager_common_send_message(SERVER_SPEAKER,    &msg);
+	manager_common_send_message(SERVER_SPEAKER, &msg);
 	/****************************/
 	info.status = STATUS_IDLE;
 	return ret;
