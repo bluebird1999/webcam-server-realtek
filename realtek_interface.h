@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-6.0"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-7.0"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -29,6 +29,21 @@
 #define		AUDIO_MAX_FAILED_SEND					15
 
 #define		MAX_CHANNEL_NUMBER						32
+
+//property for read and write
+#define		REALTEK_PROPERTY_SERVER_STATUS					(0x0000 | PROPERTY_TYPE_GET)
+#define		REALTEK_PROPERTY_AV_STATUS						(0x0001 | PROPERTY_TYPE_GET | PROPERTY_TYPE_NOTIFY)
+
+#define		AV_BUFFER_SIZE				32
+
+#define		AV_BUFFER_MIN_SAMPLE		300
+#define		AV_BUFFER_MAX_SAMPLE		600
+#define		AV_BUFFER_SUCCESS			0.9
+#define		AV_BUFFER_OVERRUN			0.3
+
+#define		REALTEK_OQS_NORMAL			0
+#define		REALTEK_QOS_DOWNGRADE		1
+#define		REALTEK_QOS_UPGRADE			2
 
 typedef enum {
     REALTEK_STREAM_TYPE_STREAM0 = 0,
@@ -49,20 +64,6 @@ typedef enum {
 	PACKET_QCY = 1,
 } REALTEK_PACKET_TYPE;
 
-//property for read and write
-#define		REALTEK_PROPERTY_SERVER_STATUS					(0x0000 | PROPERTY_TYPE_GET)
-#define		REALTEK_PROPERTY_AV_STATUS						(0x0001 | PROPERTY_TYPE_GET | PROPERTY_TYPE_NOTIFY)
-
-#define		AV_BUFFER_SIZE				128
-
-#define		AV_BUFFER_MIN_SAMPLE		300
-#define		AV_BUFFER_MAX_SAMPLE		600
-#define		AV_BUFFER_SUCCESS			0.9
-#define		AV_BUFFER_OVERRUN			0.3
-
-#define		REALTEK_OQS_NORMAL			0
-#define		REALTEK_QOS_DOWNGRADE		1
-#define		REALTEK_QOS_UPGRADE			2
 /*
  * structure
  */

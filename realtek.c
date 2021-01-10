@@ -327,7 +327,7 @@ static void *server_func(void)
     signal(SIGTERM, server_thread_termination);
 	pthread_detach(pthread_self());
 	misc_set_thread_name("server_realtek");
-	msg_buffer_init2(&message, MSG_BUFFER_OVERFLOW_NO, &mutex);
+	msg_buffer_init2(&message, _config_.msg_overrun, &mutex);
 	info.init = 1;
 	//default task
 	info.task.func = task_default;
