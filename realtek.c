@@ -223,7 +223,6 @@ static int server_setup(void)
 	manager_common_send_message(SERVER_VIDEO2, &msg);
 	manager_common_send_message(SERVER_VIDEO3, &msg);
 	manager_common_send_message(SERVER_AUDIO, &msg);
-	manager_common_send_message(SERVER_SPEAKER, &msg);
 	/****************************/
 	info.status = STATUS_IDLE;
 	return ret;

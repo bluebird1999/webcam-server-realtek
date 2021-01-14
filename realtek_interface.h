@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-7.0"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-8.0"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -44,6 +44,9 @@
 #define		REALTEK_OQS_NORMAL			0
 #define		REALTEK_QOS_DOWNGRADE		1
 #define		REALTEK_QOS_UPGRADE			2
+
+#define		MAX_AUDIO_FRAME_SIZE		2*1024
+#define		MAX_VIDEO_FRAME_SIZE		128*1024
 
 typedef enum {
     REALTEK_STREAM_TYPE_STREAM0 = 0,
@@ -106,12 +109,15 @@ typedef struct av_qos_t {
 
 typedef struct audio_stream_t {
 	//channel
-	int capture;
-	int encoder;
+	int capture_ch;
+	int encode_ch;
+	int	decode_ch;
 	int capture_aec_ch;
 	int atoe_resample_ch;
 	int ptoc_resample_ch;
+	int	dtom_resample_ch;
 	int playback_ch;
+	int	mixer_ch;
 	//data
 	int	frame;
 	unsigned long long int realtek_stamp;
