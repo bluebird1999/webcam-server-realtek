@@ -119,7 +119,7 @@ av_packet_t* av_buffer_get_empty(av_buffer_t *buff, int *overrun, int *success)
 		}
 	}
 	(*overrun)++;
-	log_qcy(DEBUG_INFO, "-------------av buffer overrun fixed with ===%d!---", id);
+	log_qcy(DEBUG_VERBOSE, "-------------av buffer overrun fixed with ===%d!---", id);
 	av_packet_free(&(buff->packet[id]));
 	pthread_rwlock_unlock(buff->lock);
 	return &(buff->packet[id]);

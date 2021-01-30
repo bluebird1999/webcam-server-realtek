@@ -261,7 +261,6 @@ static void task_exit(void)
 			if( !info.thread_start )
 				info.status = EXIT_STAGE2;
 			break;
-			break;
 		case EXIT_STAGE2:
 			server_release_2();
 			info.status = EXIT_FINISH;

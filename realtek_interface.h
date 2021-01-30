@@ -16,7 +16,7 @@
 /*
  * define
  */
-#define		SERVER_REALTEK_VERSION_STRING			"alpha-8.0"
+#define		SERVER_REALTEK_VERSION_STRING			"alpha-8.1"
 
 #define		MSG_REALTEK_BASE						(SERVER_REALTEK<<16)
 #define		MSG_REALTEK_SIGINT						(MSG_REALTEK_BASE | 0x0000)
@@ -46,7 +46,7 @@
 #define		REALTEK_QOS_UPGRADE			2
 
 #define		MAX_AUDIO_FRAME_SIZE		2*1024
-#define		MAX_VIDEO_FRAME_SIZE		128*1024
+#define		MAX_VIDEO_FRAME_SIZE		200*1024
 
 typedef enum {
     REALTEK_STREAM_TYPE_STREAM0 = 0,
